@@ -668,17 +668,23 @@ static int datacmp(struct rhashtable_compare_arg *arg, const void *obj)
 /**
  * unpack_profile - unpack a serialized profile
  * @e: serialized data extent information (NOT NULL)
+ * @ns_name:  pointer to the string containing the ns name
+ * @raw_text_size: pointer to the size of the raw text profile
+ * @raw_text_offset: pointer to the offset of the raw profile in data
  *
  * NOTE: unpack profile sets audit struct if there is a failure
  */
-static struct aa_profile *unpack_profile(struct aa_ext *e, char **ns_name)
+static struct aa_profile *unpack_profile(struct aa_ext *e,
+					 char **ns_name,
+					 size_t *raw_text_size,
+					 unsigned long *raw_text_offset)
 {
 	struct aa_profile *profile = NULL;
 	const char *tmpname, *tmpns = NULL, *name = NULL;
 	const char *info = "failed to unpack profile";
 	size_t ns_len;
 	struct rhashtable_params params = { 0 };
-	char *key = NULL;
+	char *key = NULL, *tmptext;
 	struct aa_data *data;
 	int i, error = -EPROTO;
 	kernel_cap_t tmpcap;
@@ -915,6 +921,12 @@ static struct aa_profile *unpack_profile(struct aa_ext *e, char **ns_name)
 			info = "failed to unpack end of key, value data table";
 			goto fail;
 		}
+	}
+
+	/* text policy is optinal */
+	*raw_text_size = unpack_blob(e, &tmptext, "text_policy");
+	if (*raw_text_size) {
+		*raw_text_offset = (void *) tmptext - e->start;
 	}
 
 	if (!unpack_nameX(e, AA_STRUCTEND, NULL)) {
@@ -1175,16 +1187,25 @@ int aa_unpack(struct aa_loaddata *udata, struct list_head *lh,
 	*ns = NULL;
 	while (e.pos < e.end) {
 		char *ns_name = NULL;
+		size_t raw_text_size = 0;
+		unsigned long raw_text_offset;
 		void *start;
 		error = verify_header(&e, e.pos == e.start, ns);
 		if (error)
 			goto fail;
 
 		start = e.pos;
-		profile = unpack_profile(&e, &ns_name);
+		profile = unpack_profile(&e, &ns_name,
+					 &raw_text_size,
+					 &raw_text_offset);
 		if (IS_ERR(profile)) {
 			error = PTR_ERR(profile);
 			goto fail;
+		}
+
+		if (aa_g_raw_text && raw_text_size) {
+			udata->raw_text_size = raw_text_size;
+			udata->raw_text_offset = raw_text_offset;
 		}
 
 		error = verify_profile(profile);

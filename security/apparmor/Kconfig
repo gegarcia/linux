@@ -40,6 +40,14 @@ config SECURITY_APPARMOR_HASH_DEFAULT
 	 these cases policy hashing can be disabled by default and
 	 enabled only if needed.
 
+config SECURITY_APPARMOR_TEXT_PROFILE
+       bool "Enable storage and introspection of raw text profile"
+       depends on SECURITY_APPARMOR
+       default n
+       help
+         This option selects whether raw text profiles can be loaded
+	 and introspected via the apparmor filesystem.
+
 config SECURITY_APPARMOR_DEBUG
 	bool "Build AppArmor with debug code"
 	depends on SECURITY_APPARMOR

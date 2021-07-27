@@ -1335,6 +1335,18 @@ fail_inflate_init:
 	return error;
 }
 
+static ssize_t rawtext_read(struct file *file, char __user *buf,
+			    size_t size, loff_t *ppos)
+{
+	struct rawdata_f_data *private = file->private_data;
+	unsigned long text_offset = private->loaddata->raw_text_offset;
+	size_t text_size = private->loaddata->raw_text_size;
+
+	return simple_read_from_buffer(buf, size, ppos,
+				       RAWDATA_F_DATA_BUF(private) +
+				       text_offset, text_size);
+}
+
 static ssize_t rawdata_read(struct file *file, char __user *buf, size_t size,
 			    loff_t *ppos)
 {
@@ -1395,6 +1407,13 @@ fail_private_alloc:
 static const struct file_operations rawdata_fops = {
 	.open = rawdata_open,
 	.read = rawdata_read,
+	.llseek = generic_file_llseek,
+	.release = rawdata_release,
+};
+
+static const struct file_operations rawtext_fops = {
+	.open = rawdata_open,
+	.read = rawtext_read,
 	.llseek = generic_file_llseek,
 	.release = rawdata_release,
 };
@@ -1474,6 +1493,14 @@ int __aa_fs_create_rawdata(struct aa_ns *ns, struct aa_loaddata *rawdata)
 	if (IS_ERR(dent))
 		goto fail;
 	rawdata->dents[AAFS_LOADDATA_COMPRESSED_SIZE] = dent;
+
+	if (aa_g_raw_text) {
+		dent = aafs_create_file("raw_text", S_IFREG | 0444, dir,
+					rawdata, &rawtext_fops);
+		if (IS_ERR(dent))
+			goto fail;
+		rawdata->dents[AAFS_LOADDATA_TEXT] = dent;
+	}
 
 	dent = aafs_create_file("raw_data", S_IFREG | 0444,
 				      dir, rawdata, &rawdata_fops);
@@ -1649,6 +1676,14 @@ static const char *rawdata_get_link_data(struct dentry *dentry,
 	return rawdata_get_link_base(dentry, inode, done, "raw_data");
 }
 
+
+static const char *rawdata_get_link_text(struct dentry *dentry,
+					 struct inode *inode,
+					 struct delayed_call *done)
+{
+	return rawdata_get_link_base(dentry, inode, done, "raw_text");
+}
+
 static const struct inode_operations rawdata_link_sha1_iops = {
 	.get_link	= rawdata_get_link_sha1,
 };
@@ -1658,6 +1693,9 @@ static const struct inode_operations rawdata_link_abi_iops = {
 };
 static const struct inode_operations rawdata_link_data_iops = {
 	.get_link	= rawdata_get_link_data,
+};
+static const struct inode_operations rawdata_link_text_iops = {
+	.get_link	= rawdata_get_link_text,
 };
 
 
@@ -1754,6 +1792,14 @@ int __aafs_profile_mkdir(struct aa_profile *profile, struct dentry *parent)
 			goto fail;
 		aa_get_proxy(profile->label.proxy);
 		profile->dents[AAFS_PROF_RAW_DATA] = dent;
+
+		dent = aafs_create("raw_text", S_IFLNK | 0444, dir,
+				   profile->label.proxy, NULL, NULL,
+				   &rawdata_link_text_iops);
+		if (IS_ERR(dent))
+			goto fail;
+		aa_get_proxy(profile->label.proxy);
+		profile->dents[AAFS_PROF_RAW_TEXT] = dent;
 	}
 
 	list_for_each_entry(child, &profile->base.profiles, base.list) {

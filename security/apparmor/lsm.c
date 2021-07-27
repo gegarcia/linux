@@ -1375,6 +1375,12 @@ module_param_named(path_max, aa_g_path_max, aauint, S_IRUSR);
 bool aa_g_paranoid_load = true;
 module_param_named(paranoid_load, aa_g_paranoid_load, aabool, S_IRUGO);
 
+/* Determines if raw text policy is available */
+bool aa_g_raw_text = IS_ENABLED(CONFIG_SECURITY_APPARMOR_TEXT_PROFILE);
+#ifdef CONFIG_SECURITY_APPARMOR_TEXT_PROFILE
+module_param_named(raw_text, aa_g_raw_text, aabool, 0600);
+#endif
+
 static int param_get_aaintbool(char *buffer, const struct kernel_param *kp);
 static int param_set_aaintbool(const char *val, const struct kernel_param *kp);
 #define param_check_aaintbool param_check_int
