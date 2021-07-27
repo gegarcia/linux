@@ -42,6 +42,7 @@ enum {
 	AAFS_LOADDATA_HASH,
 	AAFS_LOADDATA_DATA,
 	AAFS_LOADDATA_COMPRESSED_SIZE,
+	AAFS_LOADDATA_TEXT,
 	AAFS_LOADDATA_DIR,		/* must be last actual entry */
 	AAFS_LOADDATA_NDENTS		/* count of entries */
 };
@@ -67,6 +68,8 @@ struct aa_loaddata {
 	long revision;			/* the ns policy revision this caused */
 	int abi;
 	unsigned char *hash;
+	unsigned long raw_text_offset;	/* the offset of data to the raw_text*/
+	size_t raw_text_size;		/* the size of the raw text policy */
 
 	/* Pointer to payload. If @compressed_size > 0, then this is the
 	 * compressed version of the payload, else it is the uncompressed

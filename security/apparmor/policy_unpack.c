@@ -251,7 +251,7 @@ static bool unpack_X(struct aa_ext *e, enum aa_code code)
 }
 
 /**
- * unpack_nameX - check is the next element is of type X with a name of @name
+ * unpack_nameX - check if the next element is of type X with a name of @name
  * @e: serialized data extent information  (NOT NULL)
  * @code: type code
  * @name: name to match to the serialized element.  (MAYBE NULL)
@@ -671,10 +671,13 @@ static int datacmp(struct rhashtable_compare_arg *arg, const void *obj)
  *
  * NOTE: unpack profile sets audit struct if there is a failure
  */
-static struct aa_profile *unpack_profile(struct aa_ext *e, char **ns_name)
+static struct aa_profile *unpack_profile(struct aa_ext *e,
+					 char **ns_name,
+					 size_t *raw_text_size,
+					 unsigned long *raw_text_offset)
 {
 	struct aa_profile *profile = NULL;
-	const char *tmpname, *tmpns = NULL, *name = NULL;
+	const char *tmpname, *tmptext, *tmpns = NULL, *name = NULL;
 	const char *info = "failed to unpack profile";
 	size_t ns_len;
 	struct rhashtable_params params = { 0 };
@@ -917,6 +920,12 @@ static struct aa_profile *unpack_profile(struct aa_ext *e, char **ns_name)
 		}
 	}
 
+	/* text policy is optinal */
+	if ((*raw_text_size = unpack_str(e, &tmptext,
+					 "text_policy")) != 0){
+		*raw_text_offset = (void *) tmptext - e->start;
+	}
+	
 	if (!unpack_nameX(e, AA_STRUCTEND, NULL)) {
 		info = "failed to unpack end of profile";
 		goto fail;
@@ -1175,18 +1184,27 @@ int aa_unpack(struct aa_loaddata *udata, struct list_head *lh,
 	*ns = NULL;
 	while (e.pos < e.end) {
 		char *ns_name = NULL;
+		size_t raw_text_size = 0;
+		unsigned long raw_text_offset;
 		void *start;
 		error = verify_header(&e, e.pos == e.start, ns);
 		if (error)
 			goto fail;
 
 		start = e.pos;
-		profile = unpack_profile(&e, &ns_name);
+		profile = unpack_profile(&e, &ns_name,
+					 &raw_text_size,
+					 &raw_text_offset);
 		if (IS_ERR(profile)) {
 			error = PTR_ERR(profile);
 			goto fail;
 		}
 
+		if (aa_g_raw_text && raw_text_size) {
+			udata->raw_text_size = raw_text_size;
+			udata->raw_text_offset = raw_text_offset;
+		}
+		
 		error = verify_profile(profile);
 		if (error)
 			goto fail_profile;
