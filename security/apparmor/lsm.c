@@ -1041,6 +1041,57 @@ static int apparmor_socket_shutdown(struct socket *sock, int how)
 	return aa_sock_perm(OP_SHUTDOWN, AA_MAY_SHUTDOWN, sock);
 }
 
+static int apparmor_kernel_module_request(char *kmod_name)
+{
+	printk(KERN_ERR "apparmor: apparmor_kernel_module_request %s", kmod_name);	
+	return 0;
+}
+
+static int apparmor_kernel_read_file(struct file *file,
+				    enum kernel_read_file_id id,
+				    bool contents)
+{
+	printk(KERN_ERR "apparmor: apparmor_kernel_read_file %s, id:%d\n", file->f_path.dentry->d_iname, id);	
+	return 0;
+}
+
+static int apparmor_kernel_post_read_file(struct file *file, char *buf,
+					  loff_t size,
+					  enum kernel_read_file_id id)
+{
+	printk(KERN_ERR "apparmor: security_kernel_post_read_file %s, id:%d, buf:%s\n", file->f_path.dentry->d_iname, id, buf);	
+	return 0;	
+}
+
+static int apparmor_kernel_load_data(enum kernel_load_data_id id,
+				     bool contents)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	label = __begin_current_label_crit_section();
+	if (!unconfined(label)) {
+		struct aa_profile *profile;
+
+		error = fn_for_each_confined(label, profile,
+					     aa_module_data(profile));
+	}
+	__end_current_label_crit_section(label);
+
+	return error;	
+	printk(KERN_ERR "apparmor: apparmor_kernel_load_data id:%d contents:%d\n", id, contents);	
+	return 0;
+}
+
+static int apparmor_kernel_post_load_data(char *buf, loff_t size,
+				   enum kernel_load_data_id id,
+				   char *description)
+{
+	printk(KERN_ERR "apparmor: appparmor_kernel_post_load_data buf:%s, id: %d, description: %s\n", buf, id, description);	
+	return 0;
+}
+
+
 #ifdef CONFIG_NETWORK_SECMARK
 /**
  * apparmor_socket_sock_recv_skb - check perms before associating skb to sk
@@ -1241,6 +1292,12 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(inet_conn_request, apparmor_inet_conn_request),
 #endif
 
+	LSM_HOOK_INIT(kernel_module_request, apparmor_kernel_module_request),	
+	LSM_HOOK_INIT(kernel_load_data, apparmor_kernel_load_data),
+	LSM_HOOK_INIT(kernel_post_load_data, apparmor_kernel_post_load_data),
+	LSM_HOOK_INIT(kernel_read_file, apparmor_kernel_read_file),
+	LSM_HOOK_INIT(kernel_post_read_file, apparmor_kernel_post_read_file),
+	
 	LSM_HOOK_INIT(cred_alloc_blank, apparmor_cred_alloc_blank),
 	LSM_HOOK_INIT(cred_free, apparmor_cred_free),
 	LSM_HOOK_INIT(cred_prepare, apparmor_cred_prepare),

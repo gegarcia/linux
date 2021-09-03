@@ -26,6 +26,7 @@
 #define AA_CLASS_MOUNT		7
 #define AA_CLASS_PTRACE		9
 #define AA_CLASS_SIGNAL		10
+#define AA_CLASS_MODULE		11
 #define AA_CLASS_NET		14
 #define AA_CLASS_LABEL		16
 
