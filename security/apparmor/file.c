@@ -182,6 +182,7 @@ static int path_name(const char *op, struct aa_label *label,
  */
 static u32 map_old_perms(u32 old)
 {
+	printk(KERN_ERR "apparmor: map_old_perms old: %x\n", old);
 	u32 new = old & 0xf;
 	if (old & MAY_READ)
 		new |= AA_MAY_GETATTR | AA_MAY_OPEN;
@@ -197,6 +198,12 @@ static u32 map_old_perms(u32 old)
 		new |= AA_MAY_LOCK | AA_LINK_SUBSET;
 	if (old & 0x40)	/* AA_EXEC_MMAP */
 		new |= AA_EXEC_MMAP;
+	if (old & 0x4000) {
+		printk(KERN_ERR "apparmor: load_file_module\n");
+		new |= AA_MAY_LOAD_FILE_MODULE;
+	}
+
+	printk(KERN_ERR "apparmor: map_old_perms new: %x\n", new);
 
 	return new;
 }

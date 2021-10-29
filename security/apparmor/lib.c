@@ -150,7 +150,7 @@ void aa_str_kref(struct kref *kref)
 }
 
 
-const char aa_file_perm_chrs[] = "xwracd         km l     ";
+const char aa_file_perm_chrs[] = "xwracd         km l d   ";
 const char *aa_file_perm_names[] = {
 	"exec",
 	"write",
@@ -177,7 +177,7 @@ const char *aa_file_perm_names[] = {
 	"link",
 	"snapshot",
 
-	"unknown",
+	"module_file",
 	"unknown",
 	"unknown",
 	"unknown",

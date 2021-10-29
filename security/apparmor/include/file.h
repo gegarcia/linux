@@ -26,7 +26,7 @@ struct path;
 				 AA_MAY_CREATE | AA_MAY_DELETE |	\
 				 AA_MAY_GETATTR | AA_MAY_SETATTR | \
 				 AA_MAY_CHMOD | AA_MAY_CHOWN | AA_MAY_LOCK | \
-				 AA_EXEC_MMAP | AA_MAY_LINK)
+				 AA_EXEC_MMAP | AA_MAY_LINK | AA_MAY_LOAD_FILE_MODULE)
 
 static inline struct aa_file_ctx *file_ctx(struct file *file)
 {

@@ -59,6 +59,7 @@ enum audit_type {
 #define OP_CHOWN "chown"
 #define OP_GETATTR "getattr"
 #define OP_OPEN "open"
+#define OP_FMODULE "module_file"
 
 #define OP_FRECEIVE "file_receive"
 #define OP_FPERM "file_perm"
@@ -103,6 +104,8 @@ enum audit_type {
 #define OP_PROF_LOAD "profile_load"
 #define OP_PROF_RM "profile_remove"
 
+#define OP_MODULE_DATA "module_data"
+#define OP_MODULE_FILE "module_file"
 
 struct apparmor_audit_data {
 	int error;

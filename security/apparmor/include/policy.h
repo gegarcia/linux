@@ -29,6 +29,7 @@
 #include "net.h"
 #include "perms.h"
 #include "resource.h"
+#include "module.h"
 
 
 struct aa_ns;
@@ -91,6 +92,14 @@ struct aa_data {
 };
 
 
+
+struct aa_module {
+	int allow;
+	int audit;
+	int quiet;
+};
+
+
 /* struct aa_profile - basic confinement data
  * @base - base components of the profile (name, refcount, lists, lock ...)
  * @label - label this profile is an extension of
@@ -145,7 +154,8 @@ struct aa_profile {
 	struct aa_policydb policy;
 	struct aa_file_rules file;
 	struct aa_caps caps;
-
+	struct aa_module mod;
+	
 	int xattr_count;
 	char **xattrs;
 

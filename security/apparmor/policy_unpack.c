@@ -808,6 +808,19 @@ static struct aa_profile *unpack_profile(struct aa_ext *e, char **ns_name)
 			goto fail;
 	}
 
+	info = "failed to unpack profile module permissions";
+	if (unpack_nameX(e, AA_STRUCT, "mod")) {
+		/* optional module permissions */
+		if (!unpack_u32(e, &(profile->mod.allow), NULL))
+			goto fail;
+		if (!unpack_u32(e, &(profile->mod.audit), NULL))
+			goto fail;
+		if (!unpack_u32(e, &(profile->mod.quiet), NULL))
+			goto fail;
+		if (!unpack_nameX(e, AA_STRUCTEND, NULL))
+			goto fail;
+	}
+
 	if (!unpack_xattrs(e, profile)) {
 		info = "failed to unpack profile xattrs";
 		goto fail;

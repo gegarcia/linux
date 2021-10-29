@@ -40,6 +40,7 @@
 #include "include/procattr.h"
 #include "include/mount.h"
 #include "include/secid.h"
+#include "include/module.h"
 
 /* Flag indicating whether initialization completed */
 int apparmor_initialized;
@@ -1051,7 +1052,33 @@ static int apparmor_kernel_read_file(struct file *file,
 				    enum kernel_read_file_id id,
 				    bool contents)
 {
-	printk(KERN_ERR "apparmor: apparmor_kernel_read_file %s, id:%d\n", file->f_path.dentry->d_iname, id);	
+	printk(KERN_ERR "apparmor: apparmor_kernel_read_file %s, id:%d\n", file->f_path.dentry->d_iname, id);
+	//int ret = common_file_perm(OP_FMODULE, file, AA_MAY_LOAD_FILE_MODULE, false);
+
+	struct aa_file_ctx *fctx = file_ctx(file);
+	struct aa_label *label;
+	int error = 0;
+
+	if (!path_mediated_fs(file->f_path.dentry))
+		return 0;
+	
+	label = aa_get_newest_cred_label(file->f_cred);
+	if (!unconfined(label)) {
+		struct user_namespace *mnt_userns = file_mnt_user_ns(file);
+		struct inode *inode = file_inode(file);
+		struct path_cond cond = {
+			i_uid_into_mnt(mnt_userns, inode),
+			inode->i_mode
+		};
+
+		error = aa_path_perm(OP_FMODULE, label, &file->f_path, 0,
+				     AA_MAY_LOAD_FILE_MODULE, &cond);
+		/* todo cache full allowed permissions set and state */
+		fctx->allow = aa_map_file_to_perms(file) | AA_MAY_LOAD_FILE_MODULE;
+	}
+	aa_put_label(label);
+
+	printk(KERN_ERR "apparmor: read_file ret %d\n", error);
 	return 0;
 }
 
@@ -1068,18 +1095,22 @@ static int apparmor_kernel_load_data(enum kernel_load_data_id id,
 {
 	struct aa_label *label;
 	int error = 0;
-
+	printk(KERN_ERR "apparmor: apparmor_kernel_load_data id:%d contents:%d\n", id, contents);	
 	label = __begin_current_label_crit_section();
 	if (!unconfined(label)) {
+		printk(KERN_ERR "apparmor: confined\n");
 		struct aa_profile *profile;
 
 		error = fn_for_each_confined(label, profile,
 					     aa_module_data(profile));
 	}
+	else {
+		printk(KERN_ERR "apparmor: unconfined\n");
+	}
 	__end_current_label_crit_section(label);
 
-	return error;	
-	printk(KERN_ERR "apparmor: apparmor_kernel_load_data id:%d contents:%d\n", id, contents);	
+	printk(KERN_ERR "apparmor: load_data error %d\n", error);	
+
 	return 0;
 }
 
