@@ -103,6 +103,8 @@ enum audit_type {
 #define OP_PROF_LOAD "profile_load"
 #define OP_PROF_RM "profile_remove"
 
+#define OP_MODULE "module"
+
 
 struct apparmor_audit_data {
 	int error;

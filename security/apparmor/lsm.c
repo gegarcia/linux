@@ -38,6 +38,7 @@
 #include "include/policy.h"
 #include "include/policy_ns.h"
 #include "include/procattr.h"
+#include "include/module.h"
 #include "include/mount.h"
 #include "include/secid.h"
 
@@ -1169,6 +1170,57 @@ static int apparmor_inet_conn_request(const struct sock *sk, struct sk_buff *skb
 }
 #endif
 
+static int apparmor_kernel_module_request(char *kmod_name)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	label = __begin_current_label_crit_section();
+	error = aa_module_from_name(label, kmod_name, AA_MAY_REQUEST, LSM_AUDIT_DATA_KMOD);
+	__end_current_label_crit_section(label);
+
+	return error;
+}
+
+static int apparmor_kernel_load_data(enum kernel_load_data_id id,
+				     bool contents)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	switch (id) {
+	case LOADING_MODULE:
+		label = __begin_current_label_crit_section();
+		error = aa_module_from_name(label, "", AA_MAY_LOAD_DATA, LSM_AUDIT_DATA_NONE);
+		__end_current_label_crit_section(label);
+		break;
+	default:
+		break;
+	}
+
+	return error;
+}
+
+static int apparmor_kernel_read_file(struct file *file,
+				     enum kernel_read_file_id id,
+				     bool contents)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	switch (id) {
+	case READING_MODULE:
+		label = __begin_current_label_crit_section();
+		error = aa_module_from_file(label, contents ? file : NULL, AA_MAY_LOAD_FILE);
+		__end_current_label_crit_section(label);
+		break;
+	default:
+		break;
+	}
+
+	return error;
+}
+
 /*
  * The cred blob is a pointer to, not an instance of, an aa_task_ctx.
  */
@@ -1267,6 +1319,10 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(secid_to_secctx, apparmor_secid_to_secctx),
 	LSM_HOOK_INIT(secctx_to_secid, apparmor_secctx_to_secid),
 	LSM_HOOK_INIT(release_secctx, apparmor_release_secctx),
+
+	LSM_HOOK_INIT(kernel_module_request, apparmor_kernel_module_request),	
+	LSM_HOOK_INIT(kernel_load_data, apparmor_kernel_load_data),
+	LSM_HOOK_INIT(kernel_read_file, apparmor_kernel_read_file),
 };
 
 /*
