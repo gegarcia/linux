@@ -2294,6 +2294,8 @@ static struct aa_sfs_entry aa_sfs_entry_file[] = {
 static struct aa_sfs_entry aa_sfs_entry_ipc[] = {
 	AA_SFS_FILE_STRING("posix_mqueue",
 			   "create read write open delete setattr getattr"),
+	AA_SFS_FILE_STRING("sysv_mqueue",
+			   "create read write open delete setattr getattr"),
 	{ }
 };
 

@@ -13,6 +13,7 @@
 #include <linux/mm.h>
 #include <linux/mman.h>
 #include <linux/mount.h>
+#include <linux/msg.h>
 #include <linux/namei.h>
 #include <linux/ptrace.h>
 #include <linux/ctype.h>
@@ -1339,6 +1340,89 @@ static int apparmor_inet_conn_request(const struct sock *sk, struct sk_buff *skb
 }
 #endif
 
+static int apparmor_msg_queue_alloc_security(struct kern_ipc_perm *msq)
+{
+
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_mqueue(label, AA_MAY_CREATE, msq->key);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_msg_queue_associate(struct kern_ipc_perm *msq, int msqflg)
+{
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_mqueue(label, AA_MAY_OPEN, msq->key);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_msg_queue_msgctl(struct kern_ipc_perm *msq, int cmd)
+{
+	int ret = 0;
+	int perms;
+	struct aa_label *label;
+
+	switch (cmd) {
+	case IPC_INFO:
+	case MSG_INFO:
+	case IPC_STAT:
+	case MSG_STAT:
+	case MSG_STAT_ANY:
+		perms = AA_MAY_GETATTR | AA_MAY_OPEN;
+		break;
+	case IPC_SET:
+		perms = AA_MAY_SETATTR;
+		break;
+	case IPC_RMID:
+		perms = AA_MAY_DELETE;
+		break;
+	default:
+		return 0;
+	}
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_mqueue(label, perms, msq->key);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_msg_queue_msgsnd(struct kern_ipc_perm *msq,
+				     struct msg_msg *msg, int msqflg)
+{
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_mqueue(label, AA_MAY_WRITE, msq->key);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_msg_queue_msgrcv(struct kern_ipc_perm *msq, struct msg_msg *msg,
+				     struct task_struct *target,
+				     long type, int mode)
+{
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_mqueue(label, AA_MAY_READ, msq->key);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
 /*
  * The cred blob is a pointer to, not an instance of, an aa_task_ctx.
  */
@@ -1440,6 +1524,12 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(task_getsecid_obj, apparmor_task_getsecid),
 	LSM_HOOK_INIT(task_setrlimit, apparmor_task_setrlimit),
 	LSM_HOOK_INIT(task_kill, apparmor_task_kill),
+
+	LSM_HOOK_INIT(msg_queue_alloc_security, apparmor_msg_queue_alloc_security),
+	LSM_HOOK_INIT(msg_queue_associate, apparmor_msg_queue_associate),
+	LSM_HOOK_INIT(msg_queue_msgctl, apparmor_msg_queue_msgctl),
+	LSM_HOOK_INIT(msg_queue_msgsnd, apparmor_msg_queue_msgsnd),
+	LSM_HOOK_INIT(msg_queue_msgrcv, apparmor_msg_queue_msgrcv),
 
 #ifdef CONFIG_AUDIT
 	LSM_HOOK_INIT(audit_rule_init, aa_audit_rule_init),

@@ -592,7 +592,7 @@ static int __file_mqueue_perm(const char *op, struct aa_label *label,
 			      u32 request, u32 denied, bool in_atomic)
 {
 	struct aa_profile *profile;
-	char *buffer;
+	char *buffer, *name;
 	int error;
 	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_NONE, op);
 
@@ -605,15 +605,20 @@ static int __file_mqueue_perm(const char *op, struct aa_label *label,
 	if (!buffer)
 		return -ENOMEM;
 
+	error = aa_mqueue_from_path(buffer, &file->f_path,
+					&name, &sa);
+	if (error)
+		goto out;
+
 	aad(&sa)->request = request;
 	aad(&sa)->peer = NULL;
-	aad(&sa)->mq.ouid = file_inode(file)->i_uid;
-	aad(&sa)->mq.fsuid = current_fsuid();	/* mqueue uses fsuid() */
+	aad(&sa)->ipc.ouid = file_inode(file)->i_uid;
+	aad(&sa)->ipc.fsuid = current_fsuid();	/* mqueue uses fsuid() */
 
 	/* check every profile in task label not in current cache */
 	error = fn_for_each_not_in_set(flabel, label, profile,
-			aa_profile_mqueue_perm(profile, &file->f_path,
-					       request, buffer, &sa));
+			aa_profile_mqueue_perm(profile, request, name,
+					       AA_CLASS_POSIX_MQUEUE, &sa));
 	if (denied && !error) {
 		/*
 		 * check every profile in file label that was not tested
@@ -625,16 +630,18 @@ static int __file_mqueue_perm(const char *op, struct aa_label *label,
 		 */
 		if (label == flabel)
 			error = fn_for_each(label, profile,
-				aa_profile_mqueue_perm(profile, &file->f_path,
-						       request, buffer, &sa));
+				aa_profile_mqueue_perm(profile, request, name,
+						       AA_CLASS_POSIX_MQUEUE,
+						       &sa));
 		else
 			error = fn_for_each_not_in_set(label, flabel, profile,
-				aa_profile_mqueue_perm(profile, &file->f_path,
-						       request, buffer, &sa));
+				aa_profile_mqueue_perm(profile, request, name,
+						       AA_CLASS_POSIX_MQUEUE,
+						       &sa));
 	}
 	if (!error)
 		update_file_ctx(file_ctx(file), label, request);
-
+out:
 	aa_put_buffer(buffer);
 
 	return error;
