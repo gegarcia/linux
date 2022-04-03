@@ -482,19 +482,34 @@ static int apparmor_inode_init_security(struct inode *inode, struct inode *dir,
 	return -EOPNOTSUPP;
 }
 
-// TODO: investigate anon_inode_init to see if we can dump doing it here
+static int inode_init_with_dentry(struct inode *inode, struct dentry *dentry)
+{
+	struct aa_inode_sec *isec = apparmor_inode(inode);
+
+	if (isec->initialized)
+		return 0;
+	spin_lock(&isec->lock);
+	/* recheck under lock */
+	if (isec->initialized)
+		goto unlock;
+
+	if (is_mqueue_sb(inode->i_sb)) {
+		/* only initialize based on implied label atm */
+		isec->label = aa_get_current_label();
+		isec->sclass = AA_CLASS_POSIX_MQUEUE;
+		isec->initialized = true;
+	}
+
+unlock:
+	spin_unlock(&isec->lock);
+
+	return 0;
+}
+
 static void apparmor_d_instantiate(struct dentry *dentry, struct inode *inode)
 {
-	if (inode) {
-		struct aa_inode_sec *isec = apparmor_inode(inode);
-
-		if (!isec->initialized && is_mqueue_sb(inode->i_sb)) {
-			/* only initialize based on implied label atm */
-			isec->label = aa_get_current_label();
-			isec->sclass = AA_CLASS_POSIX_MQUEUE;
-			isec->initialized = true;
-		}
-	}
+	if (inode)
+		inode_init_with_dentry(inode, dentry);
 }
 
 static int apparmor_inode_create(struct inode *dir, struct dentry *dentry,
