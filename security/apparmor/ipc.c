@@ -118,7 +118,7 @@ static void audit_mqueue_cb(struct audit_buffer *ab, void *va)
 	aa_audit_perms(ab, sa, NULL, 0, NULL, AA_AUDIT_POSIX_MQUEUE_MASK);
 
 	/* move class into generic audit framse work */
-	audit_log_format(ab, "class=\"posix_mqueue\"");
+	audit_log_format(ab, " class=\"posix_mqueue\"");
 	if (aad(sa)->request & AA_AUDIT_FILE_MASK) {
 		audit_log_format(ab, " fsuid=%u",
 				 from_kuid(&init_user_ns, aad(sa)->mq.fsuid));
