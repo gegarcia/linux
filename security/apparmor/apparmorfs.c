@@ -2296,6 +2296,8 @@ static struct aa_sfs_entry aa_sfs_entry_ipc[] = {
 			   "create read write open delete setattr getattr"),
 	AA_SFS_FILE_STRING("sysv_mqueue",
 			   "create read write open delete setattr getattr"),
+	AA_SFS_FILE_STRING("sysv_shm",
+			   "create read write open delete setattr getattr lock"),
 	{ }
 };
 

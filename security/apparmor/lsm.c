@@ -1423,6 +1423,89 @@ static int apparmor_msg_queue_msgrcv(struct kern_ipc_perm *msq, struct msg_msg *
 	return ret;
 }
 
+static int apparmor_shm_alloc_security(struct kern_ipc_perm *shp)
+{
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_shm(label, AA_MAY_CREATE, shp);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_shm_associate(struct kern_ipc_perm *shp, int shmflg)
+{
+	int ret = 0;
+	struct aa_label *label;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_shm(label, AA_MAY_OPEN, shp);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_shm_shmctl(struct kern_ipc_perm *shp, int cmd)
+{
+	int ret = 0;
+	int perms;
+	struct aa_label *label;
+
+	switch (cmd) {
+	case IPC_INFO:
+	case SHM_INFO:
+		/* No specific object, just general system-wide information. */
+		return aa_may_shm(label, AA_MAY_GETATTR, NULL);
+	case IPC_STAT:
+	case SHM_STAT:
+	case SHM_STAT_ANY:
+		perms = AA_MAY_GETATTR | AA_MAY_OPEN;
+		break;
+	case IPC_SET:
+		perms = AA_MAY_SETATTR;
+		break;
+	case SHM_LOCK:
+	case SHM_UNLOCK:
+		perms = AA_MAY_LOCK;
+		break;
+	case IPC_RMID:
+		perms = AA_MAY_DELETE;
+		break;
+	default:
+		return 0;
+	}
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_shm(label, perms, shp);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
+static int apparmor_shm_shmat(struct kern_ipc_perm *shp,
+			     char __user *shmaddr, int shmflg)
+{
+	int perms;
+	int ret;
+	struct aa_label *label;
+
+	if (shmflg & SHM_RDONLY)
+		perms = AA_MAY_READ;
+	else
+		perms = AA_MAY_READ | AA_MAY_WRITE;
+
+	if (shmflg & SHM_EXEC)
+		perms |= AA_MAY_EXEC;
+
+	label = begin_current_label_crit_section();
+	ret = aa_may_shm(label, perms, shp);
+	end_current_label_crit_section(label);
+
+	return ret;
+}
+
 /*
  * The cred blob is a pointer to, not an instance of, an aa_task_ctx.
  */
@@ -1530,6 +1613,11 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(msg_queue_msgctl, apparmor_msg_queue_msgctl),
 	LSM_HOOK_INIT(msg_queue_msgsnd, apparmor_msg_queue_msgsnd),
 	LSM_HOOK_INIT(msg_queue_msgrcv, apparmor_msg_queue_msgrcv),
+
+	LSM_HOOK_INIT(shm_alloc_security, apparmor_shm_alloc_security),
+	LSM_HOOK_INIT(shm_associate, apparmor_shm_associate),
+	LSM_HOOK_INIT(shm_shmctl, apparmor_shm_shmctl),
+	LSM_HOOK_INIT(shm_shmat, apparmor_shm_shmat),
 
 #ifdef CONFIG_AUDIT
 	LSM_HOOK_INIT(audit_rule_init, aa_audit_rule_init),

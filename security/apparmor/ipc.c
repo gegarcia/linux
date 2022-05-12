@@ -255,3 +255,91 @@ int aa_may_mqueue(struct aa_label *label, u32 request, int key)
 
 	return ret;
 }
+
+static void audit_shm_cb(struct audit_buffer *ab, void *va)
+{
+	struct common_audit_data *sa = va;
+
+	aa_audit_perms(ab, sa, NULL, 0, NULL, AA_AUDIT_SHM_MASK);
+
+	if (aad(sa)->ipc.type == AA_CLASS_POSIX_SHM)
+		audit_log_format(ab, " class=\"posix_shm\"");
+	else if(aad(sa)->ipc.type == AA_CLASS_SYSV_SHM)
+		audit_log_format(ab, " class=\"sysv_shm\"");
+	if (aad(sa)->request & AA_AUDIT_FILE_MASK) {
+		audit_log_format(ab, " fsuid=%u",
+				 from_kuid(&init_user_ns, aad(sa)->ipc.fsuid));
+		audit_log_format(ab, " ouid=%u",
+				 from_kuid(&init_user_ns, aad(sa)->ipc.ouid));
+	}
+	if (aad(sa)->peer) {
+		audit_log_format(ab, " olabel=");
+		aa_label_xaudit(ab, labels_ns(aad(sa)->label), aad(sa)->peer,
+				FLAGS_NONE, GFP_ATOMIC);
+	}
+}
+
+int aa_profile_shm_perm(struct aa_profile *profile, u32 request,
+			char *name, int aa_class,
+			struct common_audit_data *sa)
+{
+	struct aa_perms perms = { };
+	unsigned int state;
+
+	if (profile_unconfined(profile) ||
+	    !PROFILE_MEDIATES(profile, aa_class))
+		return 0;
+
+	aad(sa)->label = &profile->label;
+	aad(sa)->ipc.type = aa_class;
+
+	state = aa_dfa_match(profile->policy.dfa,
+			     profile->policy.start[aa_class],
+			     name);
+	aa_compute_perms(profile->policy.dfa, state, &perms);
+	aa_apply_modes_to_perms(profile, &perms);
+	if (!denied_perms(&perms, request)) {
+		/* early bailout sufficient perms no need to do further
+		 * checks */
+		return aa_check_perms(profile, &perms, request, sa,
+				      audit_shm_cb);
+	}
+	/* continue check to see if we have label perms */
+	//aa_label_match(profile, peer??, state false, request, &perms);
+	//aa_apply_modes_to_perms(profile, &perms);
+
+	// this will just cause failure without above label check
+	return aa_check_perms(profile, &perms, request, sa, audit_shm_cb);
+}
+
+int aa_may_shm(struct aa_label *label, u32 request, struct kern_ipc_perm *shp)
+{
+	int ret = 0;
+	struct aa_profile *profile;
+	char skey[20] = "";
+	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_NONE, "sysv_shm");
+
+	if (unconfined(label)) {
+		return 0;
+	}
+
+	if (shp) {
+		ret = snprintf(skey, 20, "%d", shp->key);
+		if (ret >= 20) {
+			return -ENAMETOOLONG;
+		}
+	}
+
+	aad(&sa)->name = skey;
+	aad(&sa)->request = request;
+	aad(&sa)->peer = NULL;
+	aad(&sa)->ipc.fsuid = current_fsuid();
+	aad(&sa)->ipc.ouid = current_uid();
+
+	ret = fn_for_each(label, profile,
+			  aa_profile_shm_perm(profile, request, skey,
+					      AA_CLASS_SYSV_SHM,
+					      &sa));
+
+	return ret;
+}

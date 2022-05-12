@@ -75,4 +75,16 @@ int aa_mqueue_perm(const char *op, struct aa_label *label,
 		   const struct path *path, u32 request);
 
 int aa_may_mqueue(struct aa_label *label, u32 request, int key);
+
+
+#define AA_AUDIT_SHM_MASK (AA_MAY_WRITE | AA_MAY_READ |		    \
+			   AA_MAY_CREATE | AA_MAY_DELETE |	    \
+			   AA_MAY_OPEN | AA_MAY_SETATTR |	    \
+			   AA_MAY_GETATTR | AA_MAY_LOCK |	    \
+			   AA_MAY_EXEC)
+
+int aa_may_shm(struct aa_label *label, u32 request,
+	       struct kern_ipc_perm *shp);
+
+
 #endif /* __AA_IPC_H */
