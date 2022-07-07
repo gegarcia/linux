@@ -63,6 +63,9 @@ static void file_audit_cb(struct audit_buffer *ab, void *va)
 		audit_log_format(ab, " ouid=%d",
 				 from_kuid(&init_user_ns, aad(sa)->fs.ouid));
 	}
+	if(aad(sa)->request & AA_MAY_IOCTL) {
+		audit_log_format(ab, " ioctlcmd=0x%x", aad(sa)->ioctlcmd);
+	}
 
 	if (aad(sa)->peer) {
 		audit_log_format(ab, " target=");
@@ -280,11 +283,44 @@ int __aa_path_perm(const char *op, struct aa_profile *profile, const char *name,
 			     cond->uid, NULL, e);
 }
 
+static int __aa_ioctl_perm(const char *op, struct aa_profile *profile,
+			   const char *name, u32 request,
+			   struct path_cond *cond, unsigned int *cmd,
+			   struct aa_perms *perms)
+{
+	unsigned int state;
+	__be32 cmd_buffer;
+	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_TASK, op);
+
+	sa.u.tsk = NULL;
+	aad(&sa)->name = name;
+	aad(&sa)->fs.ouid = cond->uid;
+	aad(&sa)->ioctlcmd = *cmd;
+
+	if (profile_unconfined(profile))
+		return 0;
+
+	state = aa_str_perms(profile->file.dfa, profile->file.start, name, cond, perms);
+
+	if (denied_perms(perms, request)) {
+		return aa_check_perms(profile, perms, request, &sa, file_audit_cb);
+	}
+
+	state = aa_dfa_null_transition(profile->file.dfa, state);
+
+	cmd_buffer = cpu_to_be32((u32) *cmd);
+	state = aa_dfa_match_len(profile->file.dfa, state, (char *) &cmd_buffer, 4);
+
+	*perms = aa_compute_fperms(profile->file.dfa, state, cond);
+	aa_apply_modes_to_perms(profile, perms);
+
+	return aa_check_perms(profile, perms, request, &sa, file_audit_cb);
+}
 
 static int profile_path_perm(const char *op, struct aa_profile *profile,
 			     const struct path *path, char *buffer, u32 request,
 			     struct path_cond *cond, int flags,
-			     struct aa_perms *perms)
+			     struct aa_perms *perms, void *data)
 {
 	const char *name;
 	int error;
@@ -297,6 +333,11 @@ static int profile_path_perm(const char *op, struct aa_profile *profile,
 			  request);
 	if (error)
 		return error;
+
+	if (request & AA_MAY_IOCTL && data) // TODO: && data wont be needed after perms rework
+		return __aa_ioctl_perm(op, profile, name, request, cond,
+				       (unsigned int *) data, perms);
+
 	return __aa_path_perm(op, profile, name, request, cond, flags,
 			      perms);
 }
@@ -328,7 +369,7 @@ int aa_path_perm(const char *op, struct aa_label *label,
 		return -ENOMEM;
 	error = fn_for_each_confined(label, profile,
 			profile_path_perm(op, profile, path, buffer, request,
-					  cond, flags, &perms));
+					  cond, flags, &perms, NULL));
 
 	aa_put_buffer(buffer);
 
@@ -506,7 +547,8 @@ static void update_file_ctx(struct aa_file_ctx *fctx, struct aa_label *label,
 
 static int __file_path_perm(const char *op, struct aa_label *label,
 			    struct aa_label *flabel, struct file *file,
-			    u32 request, u32 denied, bool in_atomic)
+			    u32 request, u32 denied, bool in_atomic,
+			    void *data)
 {
 	struct aa_profile *profile;
 	struct aa_perms perms = {};
@@ -530,7 +572,7 @@ static int __file_path_perm(const char *op, struct aa_label *label,
 	/* check every profile in task label not in current cache */
 	error = fn_for_each_not_in_set(flabel, label, profile,
 			profile_path_perm(op, profile, &file->f_path, buffer,
-					  request, &cond, flags, &perms));
+					  request, &cond, flags, &perms, data));
 	if (denied && !error) {
 		/*
 		 * check every profile in file label that was not tested
@@ -544,12 +586,12 @@ static int __file_path_perm(const char *op, struct aa_label *label,
 			error = fn_for_each(label, profile,
 				profile_path_perm(op, profile, &file->f_path,
 						  buffer, request, &cond, flags,
-						  &perms));
+						  &perms, data));
 		else
 			error = fn_for_each_not_in_set(label, flabel, profile,
 				profile_path_perm(op, profile, &file->f_path,
 						  buffer, request, &cond, flags,
-						  &perms));
+						  &perms, data));
 	}
 	if (!error)
 		update_file_ctx(file_ctx(file), label, request);
@@ -596,7 +638,7 @@ static int __file_sock_perm(const char *op, struct aa_label *label,
  * Returns: %0 if access allowed else error
  */
 int aa_file_perm(const char *op, struct aa_label *label, struct file *file,
-		 u32 request, bool in_atomic)
+		 u32 request, bool in_atomic, void *data)
 {
 	struct aa_file_ctx *fctx;
 	struct aa_label *flabel;
@@ -618,12 +660,17 @@ int aa_file_perm(const char *op, struct aa_label *label, struct file *file,
 	 *
 	 * Note: the test for !unconfined(flabel) is to handle file
 	 *       delegation from unconfined tasks
+	 *
+	 * This caching of permissions does not work for IOCTLs
+	 * because the cmd parameter must be checked.
 	 */
-	denied = request & ~fctx->allow;
-	if (unconfined(label) || unconfined(flabel) ||
-	    (!denied && aa_label_is_subset(flabel, label))) {
-		rcu_read_unlock();
-		goto done;
+	if (!(request & AA_MAY_IOCTL && data)) { // TODO: && data wont be needed after perms rework
+		denied = request & ~fctx->allow;
+		if (unconfined(label) || unconfined(flabel) ||
+		    (!denied && aa_label_is_subset(flabel, label))) {
+			rcu_read_unlock();
+			goto done;
+		}
 	}
 
 	flabel  = aa_get_newest_label(flabel);
@@ -632,7 +679,7 @@ int aa_file_perm(const char *op, struct aa_label *label, struct file *file,
 
 	if (file->f_path.mnt && path_mediated_fs(file->f_path.dentry))
 		error = __file_path_perm(op, label, flabel, file, request,
-					 denied, in_atomic);
+					 denied, in_atomic, data);
 
 	else if (S_ISSOCK(file_inode(file)->i_mode))
 		error = __file_sock_perm(op, label, flabel, file, request,
@@ -662,7 +709,7 @@ static void revalidate_tty(struct aa_label *label)
 		file = file_priv->file;
 
 		if (aa_file_perm(OP_INHERIT, label, file, MAY_READ | MAY_WRITE,
-				 IN_ATOMIC))
+				 IN_ATOMIC, NULL))
 			drop_tty = 1;
 	}
 	spin_unlock(&tty->files_lock);
@@ -677,7 +724,7 @@ static int match_file(const void *p, struct file *file, unsigned int fd)
 	struct aa_label *label = (struct aa_label *)p;
 
 	if (aa_file_perm(OP_INHERIT, label, file, aa_map_file_to_perms(file),
-			 IN_ATOMIC))
+			 IN_ATOMIC, NULL))
 		return fd + 1;
 	return 0;
 }

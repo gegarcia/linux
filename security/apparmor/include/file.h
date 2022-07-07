@@ -28,6 +28,8 @@ struct path;
 				 AA_MAY_CHMOD | AA_MAY_CHOWN | AA_MAY_LOCK | \
 				 AA_EXEC_MMAP | AA_MAY_LINK)
 
+#define AA_MAY_IOCTL MAY_APPEND
+
 static inline struct aa_file_ctx *file_ctx(struct file *file)
 {
 	return file->f_security + apparmor_blob_sizes.lbs_file;
@@ -197,7 +199,10 @@ int aa_path_link(struct aa_label *label, struct dentry *old_dentry,
 		 const struct path *new_dir, struct dentry *new_dentry);
 
 int aa_file_perm(const char *op, struct aa_label *label, struct file *file,
-		 u32 request, bool in_atomic);
+		 u32 request, bool in_atomic, void *data);
+
+int aa_ioctl_perm(struct aa_label *label, struct file *file,
+		  unsigned int cmd, u32 request);
 
 void aa_inherit_files(const struct cred *cred, struct files_struct *files);
 
