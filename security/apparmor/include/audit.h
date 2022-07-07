@@ -66,6 +66,8 @@ enum audit_type {
 #define OP_FMMAP "file_mmap"
 #define OP_FMPROT "file_mprotect"
 #define OP_INHERIT "file_inherit"
+/* TODO: will probably not use this */
+#define OP_FIOCTL "file_ioctl"
 
 #define OP_PIVOTROOT "pivotroot"
 #define OP_MOUNT "mount"
@@ -117,6 +119,7 @@ struct apparmor_audit_data {
 		/* these entries require a custom callback fn */
 		struct {
 			struct aa_label *peer;
+			unsigned int ioctlcmd;
 			union {
 				struct {
 					const char *target;

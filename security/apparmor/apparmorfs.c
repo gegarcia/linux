@@ -2288,6 +2288,7 @@ static const struct file_operations aa_sfs_profiles_fops = {
 static struct aa_sfs_entry aa_sfs_entry_file[] = {
 	AA_SFS_FILE_STRING("mask",
 			   "create read write exec append mmap_exec link lock"),
+	AA_SFS_FILE_BOOLEAN("ioctl", 1),
 	{ }
 };
 

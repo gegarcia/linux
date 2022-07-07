@@ -27,6 +27,7 @@
 #include <linux/zlib.h>
 #include <net/sock.h>
 #include <uapi/linux/mount.h>
+#include <asm/ioctls.h>
 
 #include "include/apparmor.h"
 #include "include/apparmorfs.h"
@@ -643,8 +644,24 @@ static int common_file_perm(const char *op, struct file *file, u32 mask,
 		return -EACCES;
 
 	label = __begin_current_label_crit_section();
-	error = aa_file_perm(op, label, file, mask, in_atomic);
+	error = aa_file_perm(op, label, file, mask, in_atomic, NULL);
 	__end_current_label_crit_section(label);
+
+	return error;
+}
+
+
+static int apparmor_file_ioctl(struct file *file, unsigned int cmd,
+			       unsigned long arg)
+{
+	struct aa_label *label;
+	int error = 0;
+
+	label = begin_current_label_crit_section();
+	if (!unconfined(label))
+		error = aa_file_perm(OP_FIOCTL, label, file, AA_MAY_IOCTL,
+				     false, (void *)&cmd);
+	end_current_label_crit_section(label);
 
 	return error;
 }
@@ -1559,6 +1576,7 @@ static struct security_hook_list apparmor_hooks[] __lsm_ro_after_init = {
 	LSM_HOOK_INIT(mmap_file, apparmor_mmap_file),
 	LSM_HOOK_INIT(file_mprotect, apparmor_file_mprotect),
 	LSM_HOOK_INIT(file_lock, apparmor_file_lock),
+	LSM_HOOK_INIT(file_ioctl, apparmor_file_ioctl),
 
 	LSM_HOOK_INIT(getprocattr, apparmor_getprocattr),
 	LSM_HOOK_INIT(setprocattr, apparmor_setprocattr),
