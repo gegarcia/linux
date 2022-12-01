@@ -116,7 +116,6 @@ static void audit_mqueue_cb(struct audit_buffer *ab, void *va)
 
 	aa_audit_perms(ab, sa, NULL, 0, NULL, AA_AUDIT_POSIX_MQUEUE_MASK);
 
-	pr_warn("class: %d      - POSIX: %d     SYSV:%d\n", aad(sa)->ipc.type, AA_CLASS_POSIX_MQUEUE, AA_CLASS_SYSV_MQUEUE);
 	/* move class into generic audit framse work */
 	if (aad(sa)->ipc.type == AA_CLASS_POSIX_MQUEUE)
 		audit_log_format(ab, " class=\"posix_mqueue\"");
@@ -148,7 +147,6 @@ int aa_profile_mqueue_perm(struct aa_profile *profile, u32 request,
 
 	aad(sa)->label = &profile->label;
 	aad(sa)->ipc.type = aa_class;
-	pr_warn("setting ipc.type: %d    -   aa_class: %d\n", aad(sa)->ipc.type, aa_class);
 
 	state = aa_dfa_match(profile->policy.dfa,
 			     profile->policy.start[aa_class],
