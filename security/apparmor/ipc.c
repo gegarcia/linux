@@ -119,8 +119,10 @@ static void audit_mqueue_cb(struct audit_buffer *ab, void *va)
 	/* move class into generic audit framse work */
 	if (aad(sa)->ipc.type == AA_CLASS_POSIX_MQUEUE)
 		audit_log_format(ab, " class=\"posix_mqueue\"");
-	else if(aad(sa)->ipc.type == AA_CLASS_SYSV_MQUEUE)
+	else if(aad(sa)->ipc.type == AA_CLASS_SYSV_MQUEUE) {
 		audit_log_format(ab, " class=\"sysv_mqueue\"");
+		audit_log_format(ab, " name=\"%d\"", aad(sa)->ipc.key);
+	}
 	if (aad(sa)->request & AA_AUDIT_FILE_MASK) {
 		audit_log_format(ab, " fsuid=%u",
 				 from_kuid(&init_user_ns, aad(sa)->ipc.fsuid));
@@ -135,7 +137,7 @@ static void audit_mqueue_cb(struct audit_buffer *ab, void *va)
 }
 
 int aa_profile_mqueue_perm(struct aa_profile *profile, u32 request,
-			   char *queuename, int aa_class,
+			   void *queuename, int aa_class,
 			   struct common_audit_data *sa)
 {
 	struct aa_perms perms = { };
@@ -148,9 +150,18 @@ int aa_profile_mqueue_perm(struct aa_profile *profile, u32 request,
 	aad(sa)->label = &profile->label;
 	aad(sa)->ipc.type = aa_class;
 
-	state = aa_dfa_match(profile->policy.dfa,
-			     profile->policy.start[aa_class],
-			     queuename);
+	if (aa_class == AA_CLASS_POSIX_MQUEUE) {
+		state = aa_dfa_match(profile->policy.dfa,
+				     profile->policy.start[aa_class],
+				     queuename);
+	} else {
+		u32 *tmp = queuename;
+		__be32 key = cpu_to_be32(*tmp);
+		state = aa_dfa_match_len(profile->policy.dfa,
+					 profile->policy.start[aa_class],
+					 (char *) &key, 4);
+	}
+		
 	aa_compute_perms(profile->policy.dfa, state, &perms);
 	aa_apply_modes_to_perms(profile, &perms);
 	if (!denied_perms(&perms, request)) {
@@ -224,30 +235,25 @@ out:
 	return error;
 }
 
-int aa_may_mqueue(struct aa_label *label, u32 request, int key)
+int aa_may_mqueue(struct aa_label *label, u32 request, key_t key)
 {
 	int ret = 0;
 	struct aa_profile *profile;
-	char skey[20];
+
 	DEFINE_AUDIT_DATA(sa, LSM_AUDIT_DATA_NONE, "sysv_mqueue");
 
 	if (unconfined(label)) {
 		return 0;
 	}
 
-	ret = snprintf(skey, 20, "%d", key);
-	if (ret >= 20) {
-		return -ENAMETOOLONG;
-	}
-
-	aad(&sa)->name = skey;
 	aad(&sa)->request = request;
 	aad(&sa)->peer = NULL;
 	aad(&sa)->ipc.fsuid = current_fsuid();
 	aad(&sa)->ipc.ouid = current_uid();
+	aad(&sa)->ipc.key = key;
 
 	ret = fn_for_each(label, profile,
-			  aa_profile_mqueue_perm(profile, request, skey,
+			  aa_profile_mqueue_perm(profile, request, &key,
 						 AA_CLASS_SYSV_MQUEUE,
 						 &sa));
 

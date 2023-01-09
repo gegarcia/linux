@@ -140,6 +140,7 @@ struct apparmor_audit_data {
 					kuid_t fsuid;
 					kuid_t ouid;
 					int type;
+					key_t key;
 				} ipc;
 			};
 		};

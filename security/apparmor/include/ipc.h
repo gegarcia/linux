@@ -65,7 +65,7 @@ int aa_may_signal(struct aa_label *sender, struct aa_label *target, int sig);
 
 
 int aa_profile_mqueue_perm(struct aa_profile *profile, u32 request,
-			   char *queuename, int aa_class,
+			   void *queuename, int aa_class,
 			   struct common_audit_data *sa);
 
 int aa_mqueue_from_path(char *buffer, const struct path *path,
@@ -74,5 +74,5 @@ int aa_mqueue_from_path(char *buffer, const struct path *path,
 int aa_mqueue_perm(const char *op, struct aa_label *label,
 		   const struct path *path, u32 request);
 
-int aa_may_mqueue(struct aa_label *label, u32 request, int key);
+int aa_may_mqueue(struct aa_label *label, u32 request, key_t key);
 #endif /* __AA_IPC_H */
