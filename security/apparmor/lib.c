@@ -502,7 +502,7 @@ int aa_check_perms(struct aa_profile *profile, struct aa_perms *perms,
 		type = AUDIT_APPARMOR_AUDIT;
 		error = 0;
 	} else {
-		error = -EACCES;
+		error = -profile->error;
 
 		if (denied & perms->kill)
 			type = AUDIT_APPARMOR_KILL;

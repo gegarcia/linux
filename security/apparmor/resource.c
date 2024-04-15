@@ -95,7 +95,7 @@ static int profile_setrlimit(const struct cred *subj_cred,
 
 	if (rules->rlimits.mask & (1 << resource) && new_rlim->rlim_max >
 	    rules->rlimits.limits[resource].rlim_max)
-		e = -EACCES;
+		e = -profile->error;
 	return audit_resource(subj_cred, profile, resource, new_rlim->rlim_max,
 			      NULL, NULL, e);
 }
@@ -136,7 +136,7 @@ int aa_task_setrlimit(const struct cred *subj_cred, struct aa_label *label,
 		error = fn_for_each(label, profile,
 				audit_resource(subj_cred, profile, resource,
 					       new_rlim->rlim_max, peer,
-					       "cap_sys_resource", -EACCES));
+					       "cap_sys_resource", -profile->error));
 	else
 		error = fn_for_each_confined(label, profile,
 				profile_setrlimit(subj_cred, profile, resource,

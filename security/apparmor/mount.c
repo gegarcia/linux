@@ -322,8 +322,10 @@ static int match_mnt_path_str(const struct cred *subj_cred,
 
 	error = aa_path_name(mntpath, path_flags(profile, mntpath), buffer,
 			     &mntpnt, &info, profile->disconnected);
-	if (error)
+	if (error) {
+		error = -profile->error;
 		goto audit;
+	}
 	if (IS_ERR(devname)) {
 		error = PTR_ERR(devname);
 		devname = NULL;
@@ -331,7 +333,7 @@ static int match_mnt_path_str(const struct cred *subj_cred,
 		goto audit;
 	}
 
-	error = -EACCES;
+	error = -profile->error;
 	pos = do_match_mnt(rules->policy,
 			   rules->policy->start[AA_CLASS_MOUNT],
 			   mntpnt, devname, type, flags, data, binary, &perms);
@@ -371,7 +373,7 @@ static int match_mnt(const struct cred *subj_cred,
 	const char *devname = NULL, *info = NULL;
 	struct aa_ruleset *rules = list_first_entry(&profile->rules,
 						    typeof(*rules), list);
-	int error = -EACCES;
+	int error = -profile->error;
 
 	AA_BUG(!profile);
 	AA_BUG(devpath && !devbuffer);
@@ -617,15 +619,17 @@ static int profile_umount(const struct cred *subj_cred,
 
 	error = aa_path_name(path, path_flags(profile, path), buffer, &name,
 			     &info, profile->disconnected);
-	if (error)
+	if (error) {
+		error = profile->error;
 		goto audit;
+	}
 
 	state = aa_dfa_match(rules->policy->dfa,
 			     rules->policy->start[AA_CLASS_MOUNT],
 			     name);
 	perms = *aa_lookup_perms(rules->policy, state);
 	if (AA_MAY_UMOUNT & ~perms.allow)
-		error = -EACCES;
+		error = -profile->error;
 
 audit:
 	return audit_mount(subj_cred, profile, OP_UMOUNT, name, NULL, NULL,
@@ -692,7 +696,7 @@ static struct aa_label *build_pivotroot(const struct cred *subj_cred,
 	if (error)
 		goto audit;
 
-	error = -EACCES;
+	error = -profile->error;
 	state = aa_dfa_match(rules->policy->dfa,
 			     rules->policy->start[AA_CLASS_MOUNT],
 			     new_name);
@@ -704,6 +708,8 @@ static struct aa_label *build_pivotroot(const struct cred *subj_cred,
 		error = 0;
 
 audit:
+	if (error)
+		error = -profile->error;
 	error = audit_mount(subj_cred, profile, OP_PIVOTROOT, new_name,
 			    old_name,
 			    NULL, trans_name, 0, NULL, AA_MAY_PIVOTROOT,

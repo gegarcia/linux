@@ -78,7 +78,7 @@ static inline int unix_fs_perm(const char *op, u32 mask,
 					      u->addr->name->sun_path, NULL,
 					      NULL, cond.uid,
 					      "Failed name lookup - deleted entry",
-					      -EACCES, false));
+					      -profile->error, false));
 	} else {
 		/* the sunpath may not be valid for this ns so use the path */
 		struct path_cond cond = { u->path.dentry->d_inode->i_uid,

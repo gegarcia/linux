@@ -159,13 +159,13 @@ next:
 				       &cond));
 	aa_apply_modes_to_perms(profile, perms);
 	if ((perms->allow & request) != request)
-		return -EACCES;
+		return -profile->error;
 
 	return 0;
 
 fail:
 	*perms = nullperms;
-	return -EACCES;
+	return -profile->error;
 }
 
 /**
@@ -228,13 +228,13 @@ next:
 	}
 
 	if ((perms->allow & request) != request)
-		return -EACCES;
+		return -profile->error;
 
 	return 0;
 
 fail:
 	*perms = nullperms;
-	return -EACCES;
+	return -profile->error;
 }
 
 /**
@@ -655,6 +655,7 @@ static struct aa_label *profile_transition(const struct cred *subj_cred,
 	error = aa_path_name(&bprm->file->f_path, profile->path_flags, buffer,
 			     &name, &info, profile->disconnected);
 	if (error) {
+		error = profile->error;
 		if (!profile_mediates(profile, AA_CLASS_FILE) ||
 		    (profile->label.flags & FLAG_IX_ON_NAME_ERROR)) {
 			AA_DEBUG(DEBUG_DOMAIN, "name lookup ix on error");
@@ -686,7 +687,7 @@ static struct aa_label *profile_transition(const struct cred *subj_cred,
 			/* hack ix fallback - improve how this is detected */
 			goto audit;
 		} else if (!new) {
-			error = -EACCES;
+			error = -profile->error;
 			info = "profile transition not found";
 			/* remove MAY_EXEC to audit as failure */
 			perms.allow &= ~MAY_EXEC;
@@ -701,13 +702,13 @@ static struct aa_label *profile_transition(const struct cred *subj_cred,
 			error = -ENOMEM;
 			info = "could not create null profile";
 		} else {
-			error = -EACCES;
+			error = -profile->error;
 			new = &new_profile->label;
 		}
 		perms.xindex |= AA_X_UNSAFE;
 	} else
 		/* fail exec */
-		error = -EACCES;
+		error = -profile->error;
 
 	if (!new)
 		goto audit;
@@ -745,7 +746,7 @@ static int profile_onexec(const struct cred *subj_cred,
 	aa_state_t state = rules->file->start[AA_CLASS_FILE];
 	struct aa_perms perms = {};
 	const char *xname = NULL, *info = "change_profile onexec";
-	int error = -EACCES;
+	int error = -profile->error;
 
 	AA_BUG(!profile);
 	AA_BUG(!onexec);
@@ -765,6 +766,7 @@ static int profile_onexec(const struct cred *subj_cred,
 	error = aa_path_name(&bprm->file->f_path, profile->path_flags, buffer,
 			     &xname, &info, profile->disconnected);
 	if (error) {
+		error = profile->error;
 		if (!profile_mediates(profile, AA_CLASS_FILE) ||
 		    (profile->label.flags & FLAG_IX_ON_NAME_ERROR)) {
 			AA_DEBUG(DEBUG_DOMAIN, "name lookup ix on error");
@@ -1310,7 +1312,8 @@ fail:
 	fn_for_each_in_ns(label, profile,
 		aa_audit_file(subj_cred, profile, &perms, OP_CHANGE_HAT,
 			      AA_MAY_CHANGEHAT, NULL, NULL, target,
-			      GLOBAL_ROOT_UID, info, error, false));
+			      GLOBAL_ROOT_UID, info,
+			      error ? -profile->error : error, false));
 
 	goto out;
 }
@@ -1485,7 +1488,7 @@ check:
 	/* TODO: add permission check to allow this
 	 * if ((flags & AA_CHANGE_ONEXEC) && !current_is_single_threaded()) {
 	 *      info = "not a single threaded task";
-	 *      error = -EACCES;
+	 *      error = -profile->error;
 	 *      goto audit;
 	 * }
 	 */

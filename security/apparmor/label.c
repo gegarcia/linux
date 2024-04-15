@@ -1335,7 +1335,7 @@ next:
 	*perms = *aa_lookup_perms(rules->policy, state);
 	aa_apply_modes_to_perms(profile, perms);
 	if ((perms->allow & request) != request)
-		return -EACCES;
+		return -profile->error;
 
 	return 0;
 
@@ -1400,13 +1400,13 @@ next:
 	}
 
 	if ((perms->allow & request) != request)
-		return -EACCES;
+		return -profile->error;
 
 	return 0;
 
 fail:
 	*perms = nullperms;
-	return -EACCES;
+	return -profile->error;
 }
 
 /**

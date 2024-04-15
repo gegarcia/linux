@@ -311,6 +311,7 @@ static int path_name(const char *op, const struct cred *subj_cred,
 	error = aa_path_name(path, flags, buffer, name, &info,
 			     labels_profile(label)->disconnected);
 	if (error) {
+		error = -profile->error;
 		fn_for_each_confined(label, profile,
 			aa_audit_file(subj_cred,
 				      profile, &nullperms, op, request, *name,
@@ -387,7 +388,7 @@ int __aa_path_perm(const char *op,  const struct cred *subj_cred,
 	aa_str_perms(rules->file, rules->file->start[AA_CLASS_FILE],
 		     name, cond, perms);
 	if (request & ~perms->allow)
-		e = -EACCES;
+		e = -profile->error;
 	return aa_audit_file(subj_cred,
 			     profile, perms, op, request, name, NULL, NULL,
 			     cond->uid, NULL, e, prompt);
@@ -500,7 +501,7 @@ static int profile_path_link(const struct cred *subj_cred,
 	if (error)
 		goto audit;
 
-	error = -EACCES;
+	error = -profile->error;
 	/* aa_str_perms - handles the case of the dfa being NULL */
 	state = aa_str_perms(rules->file,
 			     rules->file->start[AA_CLASS_FILE], lname,
