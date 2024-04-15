@@ -246,6 +246,7 @@ struct aa_profile {
 	long mode;
 	u32 path_flags;
 	int signal;
+	int error;
 	const char *disconnected;
 
 	struct aa_attachment attach;
