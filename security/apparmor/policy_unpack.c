@@ -747,26 +747,29 @@ static int unpack_pdb(struct aa_ext *e, struct aa_policydb **policy,
 			*info = "missing required dfa";
 			goto fail;
 		}
-		goto out;
+	} else {
+		/*
+		 * only unpack the following if a dfa is present
+		 *
+		 * sadly start was given different names for file and policydb
+		 * but since it is optional we can try both
+		 */
+		if (!aa_unpack_u32(e, &pdb->start[0], "start"))
+			/* default start state */
+			pdb->start[0] = DFA_START;
+		if (!aa_unpack_u32(e, &pdb->start[AA_CLASS_FILE], "dfa_start")) {
+			/* default start state for xmatch and file dfa */
+			pdb->start[AA_CLASS_FILE] = DFA_START;
+		}	/* setup class index */
+		for (i = AA_CLASS_FILE + 1; i <= AA_CLASS_LAST; i++) {
+			pdb->start[i] = aa_dfa_next(pdb->dfa, pdb->start[0],
+						    i);
+		}
 	}
 
-	/*
-	 * only unpack the following if a dfa is present
-	 *
-	 * sadly start was given different names for file and policydb
-	 * but since it is optional we can try both
-	 */
-	if (!aa_unpack_u32(e, &pdb->start[0], "start"))
-		/* default start state */
-		pdb->start[0] = DFA_START;
-	if (!aa_unpack_u32(e, &pdb->start[AA_CLASS_FILE], "dfa_start")) {
-		/* default start state for xmatch and file dfa */
-		pdb->start[AA_CLASS_FILE] = DFA_START;
-	}	/* setup class index */
-	for (i = AA_CLASS_FILE + 1; i <= AA_CLASS_LAST; i++) {
-		pdb->start[i] = aa_dfa_next(pdb->dfa, pdb->start[0],
-					       i);
-	}
+	/* a transition table could be present even if the dfa is not,
+	 * for example: the file dfa would not be present for
+	 * pivot_root rules but they can still have a trans table */
 	if (!unpack_trans_table(e, &pdb->trans) && required_trans) {
 		*info = "failed to unpack profile transition table";
 		goto fail;
@@ -774,7 +777,7 @@ static int unpack_pdb(struct aa_ext *e, struct aa_policydb **policy,
 
 	/* TODO: move compat mapping here, requires dfa merging first */
 	/* TODO: move verify here, it has to be done after compat mappings */
-out:
+
 	*policy = pdb;
 	return 0;
 
